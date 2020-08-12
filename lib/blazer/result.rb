@@ -9,6 +9,32 @@ module Blazer
       @error = error
       @cached_at = cached_at
       @just_cached = just_cached
+      extract_json_agg
+    end
+
+    def extract_json_agg
+      return unless @columns.include?("json_object_agg")
+      idx = @columns.index("json_object_agg")
+      new_cols = extract_columns_from_json_rows(@rows, idx).sort
+      @columns[idx, idx] = new_cols
+      @rows.each do |row|
+        Rails.logger.warn row[idx]
+        json_agg = JSON.parse(row[idx])
+        new_vals = new_cols.map { |col| json_agg[col] }
+        row[idx, idx] = new_vals
+      end
+    end
+
+    def blazer_json?(json)
+      JSON.parse(json)
+      true
+    rescue JSON::ParserError => e
+      false
+    end
+
+    def extract_columns_from_json_rows(rows, idx)
+      jsons = rows.map { |row| JSON.parse(row[idx]) }
+      jsons.map(&:keys).flatten.uniq.compact
     end
 
     def timed_out?
