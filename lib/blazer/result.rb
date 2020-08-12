@@ -1,5 +1,7 @@
 module Blazer
   class Result
+    JSON_AGG_COLUMN = "json_object_agg".freeze
+
     attr_reader :data_source, :columns, :rows, :error, :cached_at, :just_cached, :forecast_error
 
     def initialize(data_source, columns, rows, error, cached_at, just_cached)
@@ -13,12 +15,11 @@ module Blazer
     end
 
     def extract_json_agg
-      return unless @columns.include?("json_object_agg")
-      idx = @columns.index("json_object_agg")
-      new_cols = extract_columns_from_json_rows(@rows, idx).sort
+      return unless @columns.include?(JSON_AGG_COLUMN)
+      idx = @columns.index(JSON_AGG_COLUMN)
+      new_cols = extract_columns_from_json_rows(@rows, idx)
       @columns[idx, idx] = new_cols
       @rows.each do |row|
-        Rails.logger.warn row[idx]
         json_agg = JSON.parse(row[idx])
         new_vals = new_cols.map { |col| json_agg[col] }
         row[idx, idx] = new_vals
@@ -34,7 +35,13 @@ module Blazer
 
     def extract_columns_from_json_rows(rows, idx)
       jsons = rows.map { |row| JSON.parse(row[idx]) }
-      jsons.map(&:keys).flatten.uniq.compact
+      cols = jsons.map(&:keys).flatten.uniq.compact
+      # Check for range segments like <=3, 3-30, >31
+      if cols.all? { |c| c.match?(/\A(\d+|<=?\d+|\d+-\d+|>\d+)\Z/) }
+        cols.sort_by { |c| c.match(/(\d+)/)[1].to_i }
+      else
+        cols
+      end
     end
 
     def timed_out?
