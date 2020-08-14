@@ -2,7 +2,7 @@ module Blazer
   class Result
     JSON_AGG_COLUMN = "json_object_agg".freeze
 
-    attr_reader :data_source, :columns, :rows, :error, :cached_at, :just_cached, :forecast_error
+    attr_reader :data_source, :columns, :rows, :error, :cached_at, :just_cached, :forecast_error, :sums
 
     def initialize(data_source, columns, rows, error, cached_at, just_cached)
       @data_source = data_source
@@ -19,11 +19,18 @@ module Blazer
       idx = @columns.index(JSON_AGG_COLUMN)
       new_cols = extract_columns_from_json_rows(@rows, idx)
       @columns[idx, idx] = new_cols
+      sum_column = @columns.last.match?(/(total|sum)/i)
+      @sums = [0] * new_cols.size
+      @sums << 0 if sum_column
       @rows.each do |row|
         json_agg = JSON.parse(row[idx])
         new_vals = new_cols.map { |col| json_agg[col] }
         row[idx, idx] = new_vals
+        new_vals.each_with_index { |v, i| @sums[i] += v || 0 }
+        @sums[-1] += row.last if sum_column
       end
+      @sums.unshift(*([nil] * idx))
+      @json_agg = true
     end
 
     def blazer_json?(json)

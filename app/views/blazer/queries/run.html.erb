@@ -188,6 +188,17 @@
                 </tr>
               <% end %>
             </tbody>
+            <% if @result.sums %>
+            <tfoot>
+                <tr>
+                  <% @result.sums.each do |v| %>
+                    <th>
+                      <%= v %>
+                    </th>
+                  <% end %>
+                </tr>
+            </tfoot>
+            <% end %>
           </table>
         <% end %>
       </div>
