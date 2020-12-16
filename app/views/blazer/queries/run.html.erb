@@ -6,25 +6,20 @@
   <% else %>
     <div class="alert alert-info">Can’t preview queries with variables...yet!</div>
   <% end %>
+<% elsif @cohort_analysis %>
+  <% if @cohort_error %>
+    <div class="alert alert-info"><%= @cohort_error %></div>
+  <% else %>
+    <%= render partial: "cohorts" %>
+  <% end %>
 <% else %>
   <% unless @only_chart %>
-    <% if @cached_at || @just_cached %>
-      <p class="text-muted" style="float: right;">
-        <% if @cached_at %>
-          Cached <%= time_ago_in_words(@cached_at, include_seconds: true) %> ago
-        <% elsif params[:query_id] %>
-          Cached just now
-          <% if @data_source.cache_mode == "slow" %>
-            (over <%= "%g" % @data_source.cache_slow_threshold %>s)
-          <% end %>
-        <% end %>
-
-        <% if @query && params[:query_id] %>
-          <%= link_to "Refresh", refresh_query_path(@query, variable_params(@query)), method: :post %>
-        <% end %>
-      </p>
-    <% end %>
+    <%= render partial: "caching" %>
     <p class="text-muted" style="margin-bottom: 10px;">
+      <% if @row_limit && @rows.size > @row_limit %>
+        First
+        <% @rows = @rows.first(@row_limit) %>
+      <% end %>
       <%= pluralize(@rows.size, "row") %>
 
       <% @checks.select(&:state).each do |check| %>
@@ -42,6 +37,9 @@
   <% end %>
   <% if @forecast_error %>
     <div class="alert alert-danger"><%= @forecast_error %></div>
+  <% end %>
+  <% if @cohort_error %>
+    <div class="alert alert-info"><%= @cohort_error %></div>
   <% end %>
   <% if @rows.any? %>
     <% values = @rows.first %>
@@ -107,13 +105,13 @@
       </script>
     <% elsif chart_type == "line" %>
       <% chart_data = @columns[1..-1].each_with_index.map{ |k, i| {name: blazer_series_name(k), data: @rows.map{ |r| [r[0], r[i + 1]] }, library: series_library[i]} } %>
-      <%= line_chart chart_data, chart_options %>
+      <%= line_chart chart_data, **chart_options %>
     <% elsif chart_type == "line2" %>
-      <%= line_chart @rows.group_by { |r| v = r[1]; (@boom[@columns[1]] || {})[v.to_s] || v }.each_with_index.map { |(name, v), i| {name: blazer_series_name(name), data: v.map { |v2| [v2[0], v2[2]] }, library: series_library[i]} }, chart_options %>
+      <%= line_chart @rows.group_by { |r| v = r[1]; (@boom[@columns[1]] || {})[v.to_s] || v }.each_with_index.map { |(name, v), i| {name: blazer_series_name(name), data: v.map { |v2| [v2[0], v2[2]] }, library: series_library[i]} }, **chart_options %>
     <% elsif chart_type == "pie" %>
-      <%= pie_chart @rows.map { |r| [(@boom[@columns[0]] || {})[r[0].to_s] || r[0], r[1]] }, chart_options %>
+      <%= pie_chart @rows.map { |r| [(@boom[@columns[0]] || {})[r[0].to_s] || r[0], r[1]] }, **chart_options %>
     <% elsif chart_type == "bar" %>
-      <%= column_chart (values.size - 1).times.map { |i| name = @columns[i + 1]; {name: blazer_series_name(name), data: @rows.first(20).map { |r| [(@boom[@columns[0]] || {})[r[0].to_s] || r[0], r[i + 1]] } } }, chart_options %>
+      <%= column_chart (values.size - 1).times.map { |i| name = @columns[i + 1]; {name: blazer_series_name(name), data: @rows.first(20).map { |r| [(@boom[@columns[0]] || {})[r[0].to_s] || r[0], r[i + 1]] } } }, **chart_options %>
     <% elsif chart_type == "bar2" %>
       <% first_20 = @rows.group_by { |r| r[0] }.values.first(20).flatten(1) %>
       <% labels = first_20.map { |r| r[0] }.uniq %>
@@ -123,7 +121,7 @@
           <% first_20 << [l, s, 0] unless first_20.find { |r| r[0] == l && r[1] == s } %>
         <% end %>
       <% end %>
-      <%= column_chart first_20.group_by { |r| v = r[1]; (@boom[@columns[1]] || {})[v.to_s] || v }.each_with_index.map { |(name, v), i| {name: blazer_series_name(name), data: v.sort_by { |r2| labels.index(r2[0]) }.map { |v2| v3 = v2[0]; [(@boom[@columns[0]] || {})[v3.to_s] || v3, v2[2]] }} }, chart_options %>
+      <%= column_chart first_20.group_by { |r| v = r[1]; (@boom[@columns[1]] || {})[v.to_s] || v }.each_with_index.map { |(name, v), i| {name: blazer_series_name(name), data: v.sort_by { |r2| labels.index(r2[0]) }.map { |v2| v3 = v2[0]; [(@boom[@columns[0]] || {})[v3.to_s] || v3, v2[2]] }} }, **chart_options %>
     <% elsif chart_type == "scatter" %>
       <%= scatter_chart @rows, xtitle: @columns[0], ytitle: @columns[1], **chart_options %>
     <% elsif @only_chart %>
@@ -147,7 +145,7 @@
         <% elsif @columns == ["PLAN"] && @data_source.adapter == "druid" %>
           <pre><code><%= @rows[0][0] %></code></pre>
         <% else %>
-          <table class="table results-table" style="margin-bottom: 0;">
+          <table class="table results-table">
             <thead>
               <tr>
                 <% @columns.each_with_index do |key, i| %>

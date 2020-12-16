@@ -6,6 +6,8 @@ module Blazer
     skip_after_action(*filters, raise: false)
     skip_around_action(*filters, raise: false)
 
+    clear_helpers
+
     protect_from_forgery with: :exception
 
     if ENV["BLAZER_PASSWORD"]
@@ -65,6 +67,12 @@ module Blazer
         end
       end
 
+      def add_cohort_analysis_vars
+        @bind_vars << "cohort_period" unless @bind_vars.include?("cohort_period")
+        @smart_vars["cohort_period"] = ["day", "week", "month"]
+        params[:cohort_period] ||= "week"
+      end
+
       def parse_smart_variables(var, data_source)
         smart_var_data_source =
           ([data_source] + Array(data_source.settings["inherit_smart_settings"]).map { |ds| Blazer.data_sources[ds] }).find { |ds| ds.smart_variables[var] }
@@ -96,12 +104,12 @@ module Blazer
       # when permitted parameters are passed in Rails 6,
       # they appear to be added as GET parameters
       # root_url(params.permit(:host))
-      BLACKLISTED_KEYS = [:controller, :action, :id, :host, :query, :dashboard, :query_id, :query_ids, :table_names, :authenticity_token, :utf8, :_method, :commit, :statement, :data_source, :name, :fork_query_id, :blazer, :run_id, :script_name, :original_script_name]
+      UNPERMITTED_KEYS = [:controller, :action, :id, :host, :query, :dashboard, :query_id, :query_ids, :table_names, :authenticity_token, :utf8, :_method, :commit, :statement, :data_source, :name, :fork_query_id, :blazer, :run_id, :script_name, :original_script_name]
 
-      # remove blacklisted keys from both params and permitted keys for better sleep
+      # remove unpermitted keys from both params and permitted keys for better sleep
       def variable_params(resource)
-        permitted_keys = resource.variables - BLACKLISTED_KEYS.map(&:to_s)
-        params.except(*BLACKLISTED_KEYS).permit(*permitted_keys)
+        permitted_keys = resource.variables - UNPERMITTED_KEYS.map(&:to_s)
+        params.except(*UNPERMITTED_KEYS).slice(*permitted_keys).permit!
       end
       helper_method :variable_params
 

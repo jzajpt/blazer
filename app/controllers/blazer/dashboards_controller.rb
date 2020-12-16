@@ -21,8 +21,11 @@ module Blazer
 
     def show
       @queries = @dashboard.dashboard_queries.order(:position).preload(:query).map(&:query)
+      @statements = []
       @queries.each do |query|
-        process_vars(query.statement, query.data_source)
+        statement = query.statement.dup
+        process_vars(statement, query.data_source)
+        @statements << statement
       end
       @bind_vars ||= []
 
@@ -36,6 +39,8 @@ module Blazer
           @sql_errors << error if error
         end
       end
+
+      add_cohort_analysis_vars if @queries.any?(&:cohort_analysis?)
     end
 
     def edit
@@ -51,7 +56,7 @@ module Blazer
 
     def destroy
       @dashboard.destroy
-      redirect_to dashboards_path
+      redirect_to root_path
     end
 
     def refresh
